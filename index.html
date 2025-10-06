@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>DL Smart Surveillance</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Inter, system-ui, Arial; background:#0f1720; color:#e6eef6; text-align:center; padding:18px; }
+    h1 { color:#4ade80; margin-bottom:6px;}
+    .banner { color:#9ca3af; margin-bottom:12px; }
+    #live { border-radius:10px; border:4px solid rgba(74,222,128,0.12); box-shadow:0 8px 30px rgba(0,0,0,0.6); max-width:90%; }
+    .controls { margin-top:12px; }
+    button { background:#10b981; color:#04211b; border:none; padding:10px 14px; border-radius:9px; font-weight:600; cursor:pointer; margin:6px; }
+    button.secondary { background:#64748b; color:#fff; }
+    .alert { margin-top:10px; color:#ffdd57; font-weight:700; display:none; }
+    .gallery { display:flex; flex-wrap:wrap; justify-content:center; margin-top:18px; gap:10px; }
+    .gallery img { width:160px; height:auto; border-radius:8px; border:3px solid rgba(16,185,129,0.2); object-fit:cover; }
+  </style>
+</head>
+<body>
+  <h1>DL Smart Surveillance</h1>
+  <div class="banner">Live feed with YOLOv8 + motion heuristics. Snapshots saved on important events.</div>
+
+  <img id="live" src="/video_feed" alt="Live feed">
+
+  <div class="controls">
+    <button onclick="manualSnap()">📸 Take Manual Snapshot</button>
+    <button class="secondary" onclick="refreshGallery()">🔄 Refresh Gallery</button>
+  </div>
+
+  <div class="alert" id="alert">⚠️ Significant event detected!</div>
+
+  <div class="gallery" id="gallery"></div>
+
+  <script>
+    // poll motion status indirectly by checking gallery changes
+    async function refreshGallery(){
+      try{
+        const res = await fetch('/gallery');
+        if(!res.ok) return;
+        const files = await res.json();
+        const gallery = document.getElementById('gallery');
+        gallery.innerHTML = '';
+        files.forEach(f=>{
+          const img = document.createElement('img');
+          img.src = `/snap/${f}?t=${Date.now()}`;
+          gallery.appendChild(img);
+        });
+      }catch(e){ console.error(e) }
+    }
+
+    async function manualSnap(){
+      try{
+        const res = await fetch('/manual_snap', { method: 'POST' });
+        if(res.ok){
+          refreshGallery();
+          alert('Manual snapshot saved.');
+        } else {
+          alert('Failed to take snapshot.');
+        }
+      }catch(e){
+        alert('Error: ' + e.message);
+      }
+    }
+
+    // auto-refresh gallery & show alert when a new image appears
+    let lastCount = 0;
+    async function pollGallery(){
+      try{
+        const res = await fetch('/gallery');
+        if(!res.ok) return;
+        const files = await res.json();
+        if(files.length !== lastCount){
+          // new snapshot(s) exist
+          document.getElementById('alert').style.display = 'block';
+          refreshGallery();
+          lastCount = files.length;
+          setTimeout(()=>document.getElementById('alert').style.display='none', 3000);
+        }
+      }catch(e){}
+    }
+
+    // initial load
+    refreshGallery();
+    setInterval(pollGallery, 2500);  // check every 2.5s
+  </script>
+</body>
+</html>
